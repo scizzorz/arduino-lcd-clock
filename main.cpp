@@ -5,7 +5,7 @@
 LiquidCrystal lcd(2, 3, 10, 11, 12, 13);
 
 // initialize some settings
-int pins[]={A4,A2,A1,A0};	// pins used for buttons
+int pins[]={A0,A1,A2,A4};	// pins used for buttons
 int numPins=4;				// number of buttons
 int writeDelay=250;			// used after each serial write
 int pressDelay=50;			// used to space out multi-button presses
@@ -13,8 +13,6 @@ int baud=9600;				// baud rate for serial communication
 int requestRate=3000;		// how frequently we should poll the computer for data
 
 // initialize some timers
-unsigned long lastUpdate=0;
-unsigned long lastReceived=0;
 
 // send a value and delay slightly
 void writeVal(int val) {
@@ -44,11 +42,6 @@ void setup() {
 	lcd.clear();
 	lcd.print("Okay!");
 	delay(1000);
-	lcd.clear();
-
-	// set the timers
-	lastUpdate=millis();
-	lastReceived=millis();
 }
 
 void loop() {
@@ -64,30 +57,10 @@ void loop() {
 		while(Serial.available()>0) {
 			int y=Serial.read();
 
+			// handle characters and control
 			if((char)y=='\n') lcd.setCursor(0,1); // newline
 			else if((char)y=='\t') break; // end of signal
 			else lcd.print((char)y); // print it
-		}
-		
-		// update timers
-		lastUpdate=millis();
-		lastReceived=millis();
-
-	} else { // otherwise...
-		// if we haven't had a new display in a while,
-		// request the default display
-		if((millis()-requestRate) >= lastUpdate) {
-			writeVal(-1);
-			lastUpdate=millis();
-		}
-		// if we haven't had a new response in a while,
-		// we're probably disconnected
-		if((millis()-requestRate*2) >= lastReceived) {
-			lcd.clear();
-			lcd.print("(disconnected)");
-			lcd.setCursor(0,1);
-			lcd.print("0"); // error code
-			delay(1000);
 		}
 	}
 

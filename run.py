@@ -1,17 +1,23 @@
 #!/usr/bin/env python
 import serial,os,subprocess,re
+from time import sleep
 from datetime import datetime,date,time
 
 env='/usr/bin/env'
 path=os.path.dirname(os.path.realpath(__file__))
 port='/dev/ttyACM0'
 baud=9600
+sleepTime=0.1
+sleepTimeout=3.0
 
-ser=serial.Serial(port,baud)
+sleepCounter=0.0
+ser=serial.Serial(port,baud,timeout=0)
 print 'living in %s' % path
 
 # send a value
 def sersend(val):
+	global sleepCounter
+
 	# print it so we know what up
 	if type(val)==str:
 		print "-> %s" % val.replace("\n","\\n").replace("\t","\\t")
@@ -20,6 +26,9 @@ def sersend(val):
 	
 	# write it
 	ser.write(val)
+
+	# reset the sleep counter
+	sleepCounter=0.0
 
 # default display
 def sendClock():
@@ -84,25 +93,39 @@ def sendState():
 
 # endless loop
 while True:
-	# read a line, strip it of excess whitespace, and print it
-	line=ser.readline().strip()
-	print line
+	# read 9999 bytes from serial
+	line=ser.read(9999)
 
-	# request for default display
-	if line=='r' or line=='-1':
+	# if it's more than zero bytes of real data...
+	if len(line) > 0:
+
+		# strip it, print it
+		line=line.strip()
+		print line
+
+		# do actions
+		if line=='1': # volume down
+			os.system('%s amixer -q sset Master 2dB-' % env)
+			sendVolume()
+		elif line=='2': # volume up
+			os.system('%s amixer -q sset Master 2dB+' % env)
+			sendVolume()
+		elif line=='4': # previous track
+			os.system('%s/playback/prev.sh' % path)
+			sendSong()
+		elif line=='8': # next track
+			os.system('%s/playback/next.sh' % path)
+			sendSong()
+		elif line=='12': # play/pause track
+			os.system('%s/playback/play.sh' % path)
+			sendState()
+	
+	# increment sleep counter
+	sleepCounter+=sleepTime
+
+	# if we're sleeped out, send the default display
+	if sleepCounter>=sleepTimeout:
 		sendClock()
-	elif line=='1': # volume down
-		os.system('%s amixer -q sset Master 2dB-' % env)
-		sendVolume()
-	elif line=='2': # volume up
-		os.system('%s amixer -q sset Master 2dB+' % env)
-		sendVolume()
-	elif line=='4': # previous track
-		os.system('%s/playback/prev.sh' % path)
-		sendSong()
-	elif line=='8': # next track
-		os.system('%s/playback/next.sh' % path)
-		sendSong()
-	elif line=='12': # play/pause track
-		os.system('%s/playback/play.sh' % path)
-		sendState()
+
+	# sleeeeeep
+	sleep(sleepTime)

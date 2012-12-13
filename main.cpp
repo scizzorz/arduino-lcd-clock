@@ -12,8 +12,6 @@ int pressDelay=50;			// used to space out multi-button presses
 int baud=9600;				// baud rate for serial communication
 int requestRate=3000;		// how frequently we should poll the computer for data
 
-// initialize some timers
-
 // send a value and delay slightly
 void writeVal(int val) {
 	Serial.println(val);

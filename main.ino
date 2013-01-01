@@ -8,7 +8,7 @@ int pins[] = {A0,A1,A3,A4};   // pins used for buttons
 int numPins = 4;              // number of buttons
 int buttonLight = 13;         // pin for the button LEDs
 int backlight = 9;            // pin for the backlight LED
-int brightness = 255;         // brightness PWM'd to the backlight and buttons
+char brightness = 255;        // brightness PWM'd to the backlight and buttons
 int writeDelay = 250;         // used after each serial write
 int pressDelay = 50;          // used to space out multi-button presses
 int baud = 9600;              // baud rate for serial communication
@@ -70,8 +70,7 @@ void setup() {
 }
 
 void loop() {
-	analogWrite(buttonLight, brightness);
-	analogWrite(backlight, brightness);
+	int controlFlag = 0;
 
 	// if we've got datas available...
 	if(Serial.available()) {
@@ -86,11 +85,23 @@ void loop() {
 			int y=Serial.read();
 
 			// handle characters and control
-			if((char)y=='\n') lcd.setCursor(0,1); // newline
-			else if((char)y=='\t') break; // end of signal
-			else lcd.print((char)y); // print it
+			if(controlFlag) {
+				if(controlFlag & 0x01) {
+					brightness = (char)y;
+					controlFlag ^= 0x01;
+				}
+			} else {
+				if((char)y=='\b') controlFlag |= 0x01; // incoming brightness
+				else if((char)y=='\n') lcd.setCursor(0,1); // newline
+				else if((char)y=='\t') break; // end of signal
+				else lcd.print((char)y); // print it
+			}
 		}
 	}
+
+	// update backlight brightness
+	analogWrite(buttonLight, brightness);
+	analogWrite(backlight, brightness);
 
 	// checks buttons and writes their states if any are down
 	int x=0;

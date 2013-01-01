@@ -2,15 +2,16 @@
 #include <LiquidCrystal.h>
 
 // initialize the library with the numbers of the interface pins
-LiquidCrystal lcd(2, 3, 10, 11, 12, 13);
+LiquidCrystal lcd(2, 3, 4, 5, 6, 7);
 
 // initialize some settings
-int pins[]={A0,A1,A2,A4};	// pins used for buttons
-int numPins=4;				// number of buttons
-int writeDelay=250;			// used after each serial write
-int pressDelay=50;			// used to space out multi-button presses
-int baud=9600;				// baud rate for serial communication
-int requestRate=3000;		// how frequently we should poll the computer for data
+int pins[] = {A0,A1,A3,A4};   // pins used for buttons
+int numPins = 4;              // number of buttons
+int buttonLED = 13;           // pin for the button LEDs
+int writeDelay = 250;         // used after each serial write
+int pressDelay = 50;          // used to space out multi-button presses
+int baud = 9600;              // baud rate for serial communication
+int requestRate = 3000;       // how frequently we should poll the computer for data
 
 // send a value and delay slightly
 void writeVal(int val) {
@@ -29,16 +30,32 @@ int checkPins() {
 void setup() {
 	// set up the LCD's number of columns and rows
 	lcd.begin(16,2);
+	delay(200);
+
+	lcd.clear();
+	lcd.print("LCD: Okay!");
+	delay(1000);
 
 	// set up button pins
 	for(int i=0;i<numPins;i++) pinMode(pins[i],INPUT);
+	pinMode(buttonLED, OUTPUT);
+	digitalWrite(buttonLED, HIGH);
+
+	lcd.clear();
+	lcd.print("Pins: Okay!");
+	delay(1000);
 
 	// set up serial
 	Serial.begin(baud);
+	while(!Serial);
+
+	lcd.clear();
+	lcd.print("Serial: Okay!");
+	delay(1000);
 
 	// tell the user we're okay!
 	lcd.clear();
-	lcd.print("Okay!");
+	lcd.print("System: Okay!");
 	delay(1000);
 }
 

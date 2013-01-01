@@ -104,19 +104,19 @@ while True:
 		print line
 
 		# do actions
-		if line=='1': # volume down
+		if line=='8': # volume down
 			os.system('%s amixer -q sset Master 2dB-' % env)
 			sendVolume()
-		elif line=='2': # volume up
+		elif line=='4': # volume up
 			os.system('%s amixer -q sset Master 2dB+' % env)
 			sendVolume()
-		elif line=='4': # previous track
+		elif line=='2': # previous track
 			os.system('%s/playback/prev.sh' % path)
 			sendSong()
-		elif line=='8': # next track
+		elif line=='1': # next track
 			os.system('%s/playback/next.sh' % path)
 			sendSong()
-		elif line=='12': # play/pause track
+		elif line=='3': # play/pause track
 			os.system('%s/playback/play.sh' % path)
 			sendState()
 	

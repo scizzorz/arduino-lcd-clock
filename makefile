@@ -1,4 +1,4 @@
-BOARD_TAG    = uno
+BOARD_TAG    = leonardo
 ARDUINO_PORT = /dev/ttyACM*
 ARDUINO_LIBS = LiquidCrystal
 

@@ -2,7 +2,7 @@
 import serial
 from time import sleep
 
-port='/dev/ttyACM0'
+port='/dev/ttyACM2'
 baud=9600
 sleepTime=0.1
 ser=serial.Serial(port,baud,timeout=0)

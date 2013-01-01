@@ -15,12 +15,12 @@ ser=serial.Serial(port,baud,timeout=0)
 print 'living in %s' % path
 
 # send a value
-def sersend(val):
+def send(val):
 	global sleepCounter
 
 	# print it so we know what up
 	if type(val)==str:
-		print "-> %s" % val.replace("\n","\\n").replace("\t","\\t")
+		print "-> %s" % val.replace("\n","\\n").replace("\t","\\t").replace("\b","\\b")
 	else:
 		print "-> %s" % val
 	
@@ -29,6 +29,18 @@ def sersend(val):
 
 	# reset the sleep counter
 	sleepCounter=0.0
+
+def sendNewline():
+	print r'-> \n'
+	ser.write('\n')
+
+def sendEnd():
+	print r'-> \eof'
+	ser.write('\t')
+
+def sendBrightness(brightness):
+	print r'-> \b = %d' % brightness
+	ser.write('\b' + chr(brightness))
 
 # default display
 def sendClock():
@@ -41,10 +53,10 @@ def sendClock():
 	tstring=tstring.replace("pm","p").replace("am","a")
 
 	# send them off!
-	sersend(tstring.strip()[0:16])
-	sersend('\n')
-	sersend(dstring.strip()[0:16])
-	sersend('\t')
+	send(tstring.strip()[0:16])
+	sendNewline()
+	send(dstring.strip()[0:16])
+	sendEnd()
 
 # volume display
 def sendVolume():
@@ -54,10 +66,10 @@ def sendVolume():
 
 	# if the regex didn't match, error!
 	if volMatch==None:
-		sersend("(volume error)\n1")
+		send("(volume error)\n1")
 	else: # send it off!
-		sersend("Volume: %d/64" % int(volMatch.group(1)))
-		sersend('\t')
+		send("Volume: %d/64" % int(volMatch.group(1)))
+		sendEnd()
 
 # song display
 def sendSong():
@@ -71,12 +83,12 @@ def sendSong():
 
 	# if the regex didn't match, error!
 	if artistMatch==None or titleMatch==None:
-		sersend("(music error)\n2")
+		send("(music error)\n2")
 	else: # send them off!
-		sersend(titleMatch.group(1)[0:16])
-		sersend("\n")
-		sersend(artistMatch.group(1)[0:16])
-		sersend('\t')
+		send(titleMatch.group(1)[0:16])
+		sendNewline()
+		send(artistMatch.group(1)[0:16])
+		sendEnd()
 
 # banshee state display (playing / paused)
 def sendState():
@@ -86,10 +98,10 @@ def sendState():
 
 	# if the regex didn't match, error!
 	if stateMatch==None:
-		sersend("(music error)\n3")
+		send("(music error)\n3")
 	else: # send it off!
-		sersend("Music: %s" % stateMatch.group(1)[0:16])
-		sersend('\t')
+		send("Music: %s" % stateMatch.group(1)[0:16])
+		sendEnd()
 
 # endless loop
 while True:

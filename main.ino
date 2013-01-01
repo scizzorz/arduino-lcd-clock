@@ -1,4 +1,3 @@
-#include <Arduino.h>
 #include <LiquidCrystal.h>
 
 // initialize the library with the numbers of the interface pins
@@ -84,9 +83,3 @@ void loop() {
 	checkPins() && (delay(pressDelay),true) && (x=checkPins()) && (writeVal(x),true);
 }
 
-int main() {
-	init();
-	setup();
-	while(true) loop();
-	return 1;
-}

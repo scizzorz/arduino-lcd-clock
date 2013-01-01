@@ -49,6 +49,12 @@ void setup() {
 	lcd.print("Pins: Okay!");
 	delay(1000);
 
+	lcd.clear();
+	lcd.print("Waiting for");
+	lcd.setCursor(0,1);
+	lcd.print("serial...");
+	delay(1000);
+
 	// set up serial
 	Serial.begin(baud);
 	while(!Serial);

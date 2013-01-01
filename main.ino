@@ -6,7 +6,9 @@ LiquidCrystal lcd(2, 3, 4, 5, 6, 7);
 // initialize some settings
 int pins[] = {A0,A1,A3,A4};   // pins used for buttons
 int numPins = 4;              // number of buttons
-int buttonLED = 13;           // pin for the button LEDs
+int buttonLight = 13;         // pin for the button LEDs
+int backlight = 9;            // pin for the backlight LED
+int brightness = 255;         // brightness PWM'd to the backlight and buttons
 int writeDelay = 250;         // used after each serial write
 int pressDelay = 50;          // used to space out multi-button presses
 int baud = 9600;              // baud rate for serial communication
@@ -37,8 +39,11 @@ void setup() {
 
 	// set up button pins
 	for(int i=0;i<numPins;i++) pinMode(pins[i],INPUT);
-	pinMode(buttonLED, OUTPUT);
-	digitalWrite(buttonLED, HIGH);
+	pinMode(buttonLight, OUTPUT);
+	pinMode(backlight, OUTPUT);
+
+	analogWrite(buttonLight, brightness);
+	analogWrite(backlight, brightness);
 
 	lcd.clear();
 	lcd.print("Pins: Okay!");
@@ -59,6 +64,9 @@ void setup() {
 }
 
 void loop() {
+	analogWrite(buttonLight, brightness);
+	analogWrite(backlight, brightness);
+
 	// if we've got datas available...
 	if(Serial.available()) {
 		// wait for the full message

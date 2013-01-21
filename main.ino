@@ -50,14 +50,30 @@ void setup() {
 	delay(1000);
 
 	lcd.clear();
-	lcd.print("Waiting for");
-	lcd.setCursor(0,1);
-	lcd.print("serial...");
+	lcd.print("Starting serial!");
 	delay(1000);
 
 	// set up serial
 	Serial.begin(baud);
-	while(!Serial);
+	int y=0;
+	while(!Serial) {
+		int x=checkPins();
+		if(x==0) {
+			lcd.clear();
+			lcd.print("Waiting for");
+			lcd.setCursor(0,1);
+			lcd.print("serial");
+			y = (y+1)&3;
+			int z=y;
+			while(z-->0) lcd.print(".");
+			delay(250);
+		} else {
+			lcd.clear();
+			lcd.print("Button test: ");
+			lcd.print(x);
+			delay(250);
+		}
+	}
 
 	lcd.clear();
 	lcd.print("Serial: Okay!");
@@ -67,6 +83,11 @@ void setup() {
 	lcd.clear();
 	lcd.print("System: Okay!");
 	delay(1000);
+
+	lcd.clear();
+	lcd.print("Waiting for");
+	lcd.setCursor(0,1);
+	lcd.print("data...");
 }
 
 void loop() {

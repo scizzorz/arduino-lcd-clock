@@ -131,6 +131,12 @@ while True:
 		elif line=='3': # play/pause track
 			os.system('%s/playback/play.sh' % path)
 			sendState()
+		elif line=='12':
+			sendVolume()
+		elif line=='6':
+			sendState()
+		elif line=='5':
+			sendSong()
 	
 	# increment sleep counter
 	sleepCounter+=sleepTime

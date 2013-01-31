@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import serial,os,subprocess,re
+import serial,os,subprocess,re,dbus
 from time import sleep
 from datetime import datetime,date,time
 
@@ -7,19 +7,26 @@ env='/usr/bin/env'
 path=os.path.dirname(os.path.realpath(__file__))
 port='/dev/ttyACM0'
 baud=9600
+
+bus = dbus.SessionBus()
+banshee = bus.get_object('org.bansheeproject.Banshee','/org/bansheeproject/Banshee/PlayerEngine')
+
 sleepTime=0.1
-sleepTimeout=1.0
+
+sleepReset=0.6
+longSleepReset=3.0
 
 sleepCounter=0.0
 ser=serial.Serial(port,baud,timeout=0)
 print 'living in %s' % path
 
 brightness = 255
+auxMode = 'song'
+auxDisp = '...'
+auxScroll = 0
 
 # send a value
 def send(val):
-	global sleepCounter
-
 	# print it so we know what up
 	if type(val)==str:
 		print "-> %s" % val.replace("\n","\\n").replace("\t","\\t").replace("\b","\\b")
@@ -28,9 +35,6 @@ def send(val):
 
 	# write it
 	ser.write(val)
-
-	# reset the sleep counter
-	sleepCounter=0.0
 
 def sendNewline():
 	print r'-> \n'
@@ -48,22 +52,67 @@ def sendBrightness(newval):
 
 # default display
 def sendClock():
+	global sleepCounter
+
 	# grab the date and make some formats
 	d=datetime.now()
-	dstring=d.strftime("%B %e")
-	tstring=d.strftime("%l:%M%P %A")
+	timeString=d.strftime("%l:%M%P").strip()
+
+	dayString=d.strftime('%a')
+	monthString=d.strftime('%m').strip()
+	if monthString[0]=='0': monthString=monthString[1]
+	dateString=d.strftime('%e').strip()
+
+	dateString='%s %s/%s' % (dayString, monthString, dateString)
 
 	# shrink 'am' and 'pm' because of limited display size
-	tstring=tstring.replace("pm","p").replace("am","a")
+	timeString=timeString.replace("pm","p").replace("am","a")
+
+	topString = timeString + (' '*(16 - len(timeString+dateString))) + dateString
+
+	# update the aux display
+	updateAux()
 
 	# send them off!
-	send(tstring.strip()[0:16])
+	send(topString[0:16])
 	sendNewline()
-	send(dstring.strip()[0:16])
+	sendAux()
 	sendEnd()
+
+	# reset the sleep counter
+	sleepCounter=sleepReset
+
+def updateAux():
+	global auxMode
+
+	if auxMode=='song':
+		changeAux('%s - %s' % (banshee.GetCurrentTrack()['name'], banshee.GetCurrentTrack()['artist']))
+
+def changeAux(newAux):
+	global auxDisp, auxScroll
+
+	if auxDisp != newAux:
+		print r':: "%s"' % newAux
+		auxDisp = newAux
+		auxScroll = 0
+
+def sendAux():
+	global auxDisp, auxScroll
+
+	tempDisp = '%s | %s' % (auxDisp, auxDisp)
+
+	if len(auxDisp)>16:
+		send(tempDisp[auxScroll:auxScroll+16])
+		auxScroll += 1
+		if auxScroll == len(auxDisp)+3:
+			auxScroll = 0
+	else:
+		send(auxDisp)
 
 # volume display
 def sendVolume():
+	global sleepCounter
+
 	# request volume from amixer and regex the value out
 	vol=subprocess.check_output(["amixer","-c","0","get","Master"])
 	volMatch=re.search(r'Mono: Playback (\d+)',vol,re.MULTILINE)
@@ -75,40 +124,35 @@ def sendVolume():
 		send("Volume: %d/64" % int(volMatch.group(1)))
 		sendEnd()
 
+	# reset the sleep counter
+	sleepCounter=longSleepReset
+
 # song display
 def sendSong():
-	# request title and artist from banshee
-	title=subprocess.check_output(["%s/playback/title.sh" % path])
-	artist=subprocess.check_output(["%s/playback/artist.sh" % path])
+	global sleepCounter
 
-	# regex the values out
-	titleMatch=re.search(r'title: (.+)',title)
-	artistMatch=re.search(r'artist: (.+)',artist)
+	send(banshee.GetCurrentTrack()['name'][0:16])
+	sendNewline()
+	send(banshee.GetCurrentTrack()['artist'][0:16])
+	sendEnd()
 
-	# if the regex didn't match, error!
-	if artistMatch==None or titleMatch==None:
-		send("(music error)\n2")
-	else: # send them off!
-		send(titleMatch.group(1)[0:16])
-		sendNewline()
-		send(artistMatch.group(1)[0:16])
-		sendEnd()
+	# reset the sleep counter
+	sleepCounter=longSleepReset
 
 # banshee state display (playing / paused)
 def sendState():
-	# request state from banshee and regex the value out
-	state=subprocess.check_output(["%s/playback/playing.sh" % path])
-	stateMatch=re.search(r'current.state: (.+)',state)
+	global sleepCounter
 
-	# if the regex didn't match, error!
-	if stateMatch==None:
-		send("(music error)\n3")
-	else: # send it off!
-		send("Music: %s" % stateMatch.group(1)[0:16])
-		sendEnd()
+	send(("Music: %s" % banshee.GetCurrentState())[0:16])
+	sendEnd()
+
+	# reset the sleep counter
+	sleepCounter=longSleepReset
 
 # toggle the screens on and off
 def toggleScreens():
+	global sleepCounter
+
 	state=subprocess.check_output(["%s/playback/screens.sh" % path]).strip()
 
 	send(state)
@@ -118,13 +162,15 @@ def toggleScreens():
 		sendBrightness(255)
 	sendEnd()
 
+	# reset the sleep counter
+	sleepCounter=longSleepReset
+
 
 sendBrightness(brightness)
 # endless loop
 while True:
 	# read 9999 bytes from serial
 	line=ser.read(9999)
-
 
 	# if it's more than zero bytes of real data...
 	if len(line) > 0:
@@ -142,12 +188,15 @@ while True:
 			sendVolume()
 		elif line=='2': # previous track
 			os.system('%s/playback/prev.sh' % path)
-			sendSong()
+			#banshee.Previous()
+			#sendSong()
 		elif line=='1': # next track
 			os.system('%s/playback/next.sh' % path)
-			sendSong()
+			#banshee.Next()
+			#sendSong()
 		elif line=='3': # play/pause track
 			os.system('%s/playback/play.sh' % path)
+			#banshee.TogglePlaying()
 			sendState()
 		elif line=='12':
 			toggleScreens()
@@ -181,10 +230,10 @@ while True:
 			sleep(1)
 
 	# increment sleep counter
-	sleepCounter+=sleepTime
+	sleepCounter-=sleepTime
 
 	# if we're sleeped out, send the default display
-	if sleepCounter>=sleepTimeout:
+	if sleepCounter<=0.0:
 		state=subprocess.check_output(["%s/playback/screen-status.sh" % path]).strip()
 		if state=='locked' and brightness==255:
 			sendBrightness(5)

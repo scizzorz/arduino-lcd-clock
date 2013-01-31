@@ -11,12 +11,11 @@ baud=9600
 bus = dbus.SessionBus()
 banshee = bus.get_object('org.bansheeproject.Banshee','/org/bansheeproject/Banshee/PlayerEngine')
 
-sleepTime=0.1
+sleepDelay = 0.1
+sleepTimer = 0.0
+tickDelay = 0.6
+longDisplay = 3.0
 
-sleepReset=0.6
-longSleepReset=3.0
-
-sleepCounter=0.0
 ser=serial.Serial(port,baud,timeout=0)
 print 'living in %s' % path
 
@@ -24,6 +23,7 @@ brightness = 255
 auxMode = 'song'
 auxDisp = '...'
 auxScroll = 0
+auxTime = 0.0
 
 # send a value
 def send(val):
@@ -52,7 +52,7 @@ def sendBrightness(newval):
 
 # default display
 def sendClock():
-	global sleepCounter
+	global sleepTimer
 
 	# grab the date and make some formats
 	d=datetime.now()
@@ -80,13 +80,35 @@ def sendClock():
 	sendEnd()
 
 	# reset the sleep counter
-	sleepCounter=sleepReset
+	sleepTimer = tickDelay
 
 def updateAux():
-	global auxMode
+	global auxMode, auxTime
+
+	if auxTime > 0:
+		auxTime -= tickDelay
+		print 'tick... %f' % auxTime
+		if auxTime <= 0.0:
+			print 'tock...'
+			auxMode = 'song'
+			auxTime = 0.0
 
 	if auxMode=='song':
-		changeAux('%s - %s' % (banshee.GetCurrentTrack()['name'], banshee.GetCurrentTrack()['artist']))
+		if banshee.GetCurrentState() == 'paused':
+			changeAux("paused")
+		else:
+			changeAux('%s - %s' % (banshee.GetCurrentTrack()['name'], banshee.GetCurrentTrack()['artist']))
+
+	elif auxMode=='volume':
+		vol=subprocess.check_output(["amixer","-c","0","get","Master"])
+		volMatch=re.search(r'Mono: Playback (\d+)',vol,re.MULTILINE)
+
+		# if the regex didn't match, error!
+		if volMatch==None:
+			changeAux("(volume error)")
+		else: # send it off!
+			changeAux("Volume: %d/64" % int(volMatch.group(1)))
+
 
 def changeAux(newAux):
 	global auxDisp, auxScroll
@@ -109,49 +131,9 @@ def sendAux():
 	else:
 		send(auxDisp)
 
-# volume display
-def sendVolume():
-	global sleepCounter
-
-	# request volume from amixer and regex the value out
-	vol=subprocess.check_output(["amixer","-c","0","get","Master"])
-	volMatch=re.search(r'Mono: Playback (\d+)',vol,re.MULTILINE)
-
-	# if the regex didn't match, error!
-	if volMatch==None:
-		send("(volume error)\n1")
-	else: # send it off!
-		send("Volume: %d/64" % int(volMatch.group(1)))
-		sendEnd()
-
-	# reset the sleep counter
-	sleepCounter=longSleepReset
-
-# song display
-def sendSong():
-	global sleepCounter
-
-	send(banshee.GetCurrentTrack()['name'][0:16])
-	sendNewline()
-	send(banshee.GetCurrentTrack()['artist'][0:16])
-	sendEnd()
-
-	# reset the sleep counter
-	sleepCounter=longSleepReset
-
-# banshee state display (playing / paused)
-def sendState():
-	global sleepCounter
-
-	send(("Music: %s" % banshee.GetCurrentState())[0:16])
-	sendEnd()
-
-	# reset the sleep counter
-	sleepCounter=longSleepReset
-
 # toggle the screens on and off
 def toggleScreens():
-	global sleepCounter
+	global sleepTimer
 
 	state=subprocess.check_output(["%s/playback/screens.sh" % path]).strip()
 
@@ -163,7 +145,7 @@ def toggleScreens():
 	sendEnd()
 
 	# reset the sleep counter
-	sleepCounter=longSleepReset
+	sleepTimer=longSleepReset
 
 
 sendBrightness(brightness)
@@ -182,58 +164,34 @@ while True:
 		# do actions
 		if line=='8': # volume down
 			os.system('%s amixer -q sset Master 2dB-' % env)
-			sendVolume()
+			auxMode = 'volume'
+			auxTime = longDisplay
+
 		elif line=='4': # volume up
 			os.system('%s amixer -q sset Master 2dB+' % env)
-			sendVolume()
+			auxMode = 'volume'
+			auxTime = longDisplay
+
 		elif line=='2': # previous track
 			os.system('%s/playback/prev.sh' % path)
-			#banshee.Previous()
-			#sendSong()
+
 		elif line=='1': # next track
 			os.system('%s/playback/next.sh' % path)
-			#banshee.Next()
-			#sendSong()
+
 		elif line=='3': # play/pause track
-			os.system('%s/playback/play.sh' % path)
 			#banshee.TogglePlaying()
-			sendState()
+			os.system('%s/playback/play.sh' % path)
+
 		elif line=='12':
 			toggleScreens()
-		elif line=='6':
-			sendState()
-		elif line=='5':
-			sendSong()
-		elif line=='15':
-			send('Self-destruct...')
-			sendEnd()
-			sleep(1)
 
-			send('5')
-			sendEnd()
-			sleep(1)
-
-			send('4')
-			sendEnd()
-			sleep(1)
-
-			send('3')
-			sendEnd()
-			sleep(1)
-
-			send('2')
-			sendEnd()
-			sleep(1)
-
-			send('1')
-			sendEnd()
-			sleep(1)
+		sendClock()
 
 	# increment sleep counter
-	sleepCounter-=sleepTime
+	sleepTimer-=sleepDelay
 
 	# if we're sleeped out, send the default display
-	if sleepCounter<=0.0:
+	if sleepTimer<=0.0:
 		state=subprocess.check_output(["%s/playback/screen-status.sh" % path]).strip()
 		if state=='locked' and brightness==255:
 			sendBrightness(5)
@@ -243,4 +201,4 @@ while True:
 
 
 	# sleeeeeep
-	sleep(sleepTime)
+	sleep(sleepDelay)

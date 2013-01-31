@@ -8,11 +8,13 @@ path=os.path.dirname(os.path.realpath(__file__))
 port='/dev/ttyACM0'
 baud=9600
 sleepTime=0.1
-sleepTimeout=3.0
+sleepTimeout=1.0
 
 sleepCounter=0.0
 ser=serial.Serial(port,baud,timeout=0)
 print 'living in %s' % path
+
+brightness = 255
 
 # send a value
 def send(val):
@@ -23,7 +25,7 @@ def send(val):
 		print "-> %s" % val.replace("\n","\\n").replace("\t","\\t").replace("\b","\\b")
 	else:
 		print "-> %s" % val
-	
+
 	# write it
 	ser.write(val)
 
@@ -38,9 +40,11 @@ def sendEnd():
 	print r'-> \eof'
 	ser.write('\t')
 
-def sendBrightness(brightness):
-	print r'-> \b = %d' % brightness
-	ser.write('\b' + chr(brightness))
+def sendBrightness(newval):
+	global brightness
+	print r'-> \b = %d' % newval
+	brightness = newval
+	ser.write('\b' + chr(newval))
 
 # default display
 def sendClock():
@@ -103,10 +107,24 @@ def sendState():
 		send("Music: %s" % stateMatch.group(1)[0:16])
 		sendEnd()
 
+# toggle the screens on and off
+def toggleScreens():
+	state=subprocess.check_output(["%s/playback/screens.sh" % path]).strip()
+
+	send(state)
+	if state=='Locking':
+		sendBrightness(5)
+	elif state=='Unlocking':
+		sendBrightness(255)
+	sendEnd()
+
+
+sendBrightness(brightness)
 # endless loop
 while True:
 	# read 9999 bytes from serial
 	line=ser.read(9999)
+
 
 	# if it's more than zero bytes of real data...
 	if len(line) > 0:
@@ -132,18 +150,48 @@ while True:
 			os.system('%s/playback/play.sh' % path)
 			sendState()
 		elif line=='12':
-			sendVolume()
+			toggleScreens()
 		elif line=='6':
 			sendState()
 		elif line=='5':
 			sendSong()
-	
+		elif line=='15':
+			send('Self-destruct...')
+			sendEnd()
+			sleep(1)
+
+			send('5')
+			sendEnd()
+			sleep(1)
+
+			send('4')
+			sendEnd()
+			sleep(1)
+
+			send('3')
+			sendEnd()
+			sleep(1)
+
+			send('2')
+			sendEnd()
+			sleep(1)
+
+			send('1')
+			sendEnd()
+			sleep(1)
+
 	# increment sleep counter
 	sleepCounter+=sleepTime
 
 	# if we're sleeped out, send the default display
 	if sleepCounter>=sleepTimeout:
+		state=subprocess.check_output(["%s/playback/screen-status.sh" % path]).strip()
+		if state=='locked' and brightness==255:
+			sendBrightness(5)
+		elif state=='unlocked' and brightness==5:
+			sendBrightness(255)
 		sendClock()
+
 
 	# sleeeeeep
 	sleep(sleepTime)

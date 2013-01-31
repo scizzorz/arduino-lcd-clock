@@ -159,7 +159,7 @@ def toggleScreens():
 	sendEnd()
 
 	# reset the sleep counter
-	sleepTimer=longSleepReset
+	sleepTimer=longDisplay
 
 
 sendBrightness(brightness)

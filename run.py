@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import serial,os,subprocess,re,dbus
+import serial,os,subprocess,re,dbus,json,urllib2
 from time import sleep
 from datetime import datetime,date,time
 
@@ -87,9 +87,7 @@ def updateAux():
 
 	if auxTime > 0:
 		auxTime -= tickDelay
-		print 'tick... %f' % auxTime
 		if auxTime <= 0.0:
-			print 'tock...'
 			auxMode = 'song'
 			auxTime = 0.0
 
@@ -130,6 +128,22 @@ def sendAux():
 			auxScroll = 0
 	else:
 		send(auxDisp)
+
+def getWeather():
+	# GUYS DON't STEAL MY WUNDERGROUND API KEY SRSLY
+	# nah I don't care.
+	data = urllib2.urlopen('http://api.wunderground.com/api/4871050179d0b3bc/conditions/q/NY/Vestal.json')
+
+	j = json.load(data)
+
+	temp = int(j['current_observation']['temp_f'])
+	feelslike = int(j['current_observation']['feelslike_f'])
+	weather = j['current_observation']['weather']
+
+	#changeAux('%s: %d / %d' % (weather, temp, feelslike))
+	changeAux('%s: %d' % (weather, temp))
+
+
 
 # toggle the screens on and off
 def toggleScreens():
@@ -181,6 +195,11 @@ while True:
 		elif line=='3': # play/pause track
 			#banshee.TogglePlaying()
 			os.system('%s/playback/play.sh' % path)
+
+		elif line=='6': # weather!
+			getWeather()
+			auxMode = 'weather'
+			auxTime = 3*longDisplay
 
 		elif line=='12':
 			toggleScreens()

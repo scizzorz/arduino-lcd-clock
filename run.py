@@ -1,223 +1,110 @@
 #!/usr/bin/env python
-import serial,os,subprocess,re,dbus,json,urllib2
-from time import sleep
-from datetime import datetime,date,time
+import serial, os
+import time
+from datetime import datetime
 
 env='/usr/bin/env'
 path=os.path.dirname(os.path.realpath(__file__))
 port='/dev/ttyACM0'
 baud=9600
 
-bus = dbus.SessionBus()
-banshee = bus.get_object('org.bansheeproject.Banshee','/org/bansheeproject/Banshee/PlayerEngine')
-
-sleepDelay = 0.1
-sleepTimer = 0.0
-tickDelay = 0.6
-longDisplay = 3.0
-
-ser=serial.Serial(port,baud,timeout=0)
+ser=serial.Serial(port, baud, timeout=0)
 print 'living in %s' % path
 
 brightness = 255
-auxMode = 'song'
-auxDisp = '...'
-auxScroll = 0
-auxTime = 0.0
 
 # send a value
 def send(val):
 	# print it so we know what up
 	if type(val)==str:
-		print "-> %s" % val.replace("\n","\\n").replace("\t","\\t").replace("\b","\\b")
+		print '-> %s' % val.replace('\n',r'\n').replace('\t',r'\t').replace('\b',r'\b')
 	else:
-		print "-> %s" % val
+		print '-> %s' % val
 
 	# write it
 	ser.write(val)
 
-def sendNewline():
-	print r'-> \n'
-	ser.write('\n')
+class Clock:
+	def __init__(self, max_ticks=10):
+		self.top = Line(' ')
+		self.bottom = Line(' ')
+		self.ticks = max_ticks - 1
+		self.max_ticks = max_ticks
 
-def sendEnd():
-	print r'-> \eof'
-	ser.write('\t')
+	def send(self):
+		self.top.send()
+		send('\n')
+		self.bottom.send()
+		send('\t')
 
-def sendBrightness(newval):
+	def tick(self):
+		self.ticks += 1
+		if self.ticks >= self.max_ticks:
+			self.ticks = 0
+			self.update()
+
+	def update(self):
+		# grab the date and make some formats
+		d=datetime.now()
+
+		# make the time and convert '[ap]m' -> '[ap]'
+		time_string = d.strftime('%l:%M%P').strip()
+		time_string = time_string.replace('m','')
+
+		# make each piece of the date individually
+		# to get rid of leading whitespace / zeros
+		day_string = d.strftime('%a')
+		month_string = int(d.strftime('%m'))
+		date_string = int(d.strftime('%e'))
+		date_string = '%s %d/%d' % (day_string, month_string, date_string)
+
+		# pad the inside of the final string
+		full_string = time_string + (' '*(16 - len(time_string+date_string))) + date_string
+
+		self.top = Line(full_string)
+		self.send()
+
+	def read(self, line):
+		line = line.strip()
+		if not line: return
+
+		print line
+		# volume down
+		if line=='8':
+			os.system(env + ' amixer -q sset Master 4%- unmute')
+
+		# volume up
+		elif line=='4':
+			os.system(env + ' amixer -q sset Master 4%+ unmute')
+
+class Line:
+	def __init__(self, source):
+		self.source = source
+		self.disp = ' | '.join((source, source)) if len(source) > 16 else source
+		self.scroll = 0
+		self.scrollEnabled = (len(source) > 16)
+
+	def send(self):
+		if self.scrollEnabled:
+			send(self.disp[self.scroll:self.scroll+16])
+
+			self.scroll += 1
+			if self.scroll == len(disp)+3:
+				self.scroll = 0
+
+		else:
+			send(self.disp)
+
+def send_brightness(newval):
 	global brightness
 	print r'-> \b = %d' % newval
 	brightness = newval
 	ser.write('\b' + chr(newval))
 
-# default display
-def sendClock():
-	global sleepTimer
+CLOCK = Clock(50)
 
-	# grab the date and make some formats
-	d=datetime.now()
-	timeString=d.strftime("%l:%M%P").strip()
-
-	dayString=d.strftime('%a')
-	monthString=d.strftime('%m').strip()
-	if monthString[0]=='0': monthString=monthString[1]
-	dateString=d.strftime('%e').strip()
-
-	dateString='%s %s/%s' % (dayString, monthString, dateString)
-
-	# shrink 'am' and 'pm' because of limited display size
-	timeString=timeString.replace("pm","p").replace("am","a")
-
-	topString = timeString + (' '*(16 - len(timeString+dateString))) + dateString
-
-	# update the aux display
-	updateAux()
-
-	# send them off!
-	send(topString[0:16])
-	sendNewline()
-	sendAux()
-	sendEnd()
-
-	# reset the sleep counter
-	sleepTimer = tickDelay
-
-def updateAux():
-	global auxMode, auxTime
-
-	if auxTime > 0:
-		auxTime -= tickDelay
-		if auxTime <= 0.0:
-			auxMode = 'song'
-			auxTime = 0.0
-
-	if auxMode=='song':
-		if banshee.GetCurrentState() == 'paused':
-			changeAux("paused")
-		else:
-			changeAux('%s - %s' % (banshee.GetCurrentTrack()['name'], banshee.GetCurrentTrack()['artist']))
-
-	elif auxMode=='volume':
-		vol=subprocess.check_output(["amixer","-c","0","get","Master"])
-		volMatch=re.search(r'Mono: Playback (\d+)',vol,re.MULTILINE)
-
-		# if the regex didn't match, error!
-		if volMatch==None:
-			changeAux("(volume error)")
-		else: # send it off!
-			changeAux("Volume: %d/64" % int(volMatch.group(1)))
-
-
-def changeAux(newAux):
-	global auxDisp, auxScroll
-
-	if auxDisp != newAux:
-		print r':: "%s"' % newAux
-		auxDisp = newAux
-		auxScroll = 0
-
-def sendAux():
-	global auxDisp, auxScroll
-
-	tempDisp = '%s | %s' % (auxDisp, auxDisp)
-
-	if len(auxDisp)>16:
-		send(tempDisp[auxScroll:auxScroll+16])
-		auxScroll += 1
-		if auxScroll == len(auxDisp)+3:
-			auxScroll = 0
-	else:
-		send(auxDisp)
-
-def getWeather():
-	# GUYS DON't STEAL MY WUNDERGROUND API KEY SRSLY
-	# nah I don't care.
-	data = urllib2.urlopen('http://api.wunderground.com/api/4871050179d0b3bc/conditions/q/NY/Vestal.json')
-
-	j = json.load(data)
-
-	temp = int(j['current_observation']['temp_f'])
-	feelslike = int(j['current_observation']['feelslike_f'])
-	weather = j['current_observation']['weather']
-
-	#changeAux('%s: %d / %d' % (weather, temp, feelslike))
-	changeAux('%s: %d' % (weather, temp))
-
-
-
-# toggle the screens on and off
-def toggleScreens():
-	global sleepTimer
-
-	state=subprocess.check_output(["%s/playback/screens.sh" % path]).strip()
-
-	send(state)
-	if state=='Locking':
-		sendBrightness(5)
-	elif state=='Unlocking':
-		sendBrightness(255)
-	sendEnd()
-
-	# reset the sleep counter
-	sleepTimer=longDisplay
-
-
-sendBrightness(brightness)
-# endless loop
+send_brightness(brightness)
 while True:
-	# read 9999 bytes from serial
-	line=ser.read(9999)
-
-	# if it's more than zero bytes of real data...
-	if len(line) > 0:
-
-		# strip it, print it
-		line=line.strip()
-		print line
-
-		# do actions
-		if line=='8': # volume down
-			os.system('%s amixer -q sset Master 2dB-' % env)
-			auxMode = 'volume'
-			auxTime = longDisplay
-
-		elif line=='4': # volume up
-			os.system('%s amixer -q sset Master 2dB+' % env)
-			auxMode = 'volume'
-			auxTime = longDisplay
-
-		elif line=='2': # previous track
-			os.system('%s/playback/prev.sh' % path)
-
-		elif line=='1': # next track
-			os.system('%s/playback/next.sh' % path)
-
-		elif line=='3': # play/pause track
-			#banshee.TogglePlaying()
-			os.system('%s/playback/play.sh' % path)
-
-		elif line=='6': # weather!
-			getWeather()
-			auxMode = 'weather'
-			auxTime = 3*longDisplay
-
-		elif line=='12':
-			toggleScreens()
-
-		sendClock()
-
-	# increment sleep counter
-	sleepTimer-=sleepDelay
-
-	# if we're sleeped out, send the default display
-	if sleepTimer<=0.0:
-		state=subprocess.check_output(["%s/playback/screen-status.sh" % path]).strip()
-		if state=='locked' and brightness==255:
-			sendBrightness(5)
-		elif state=='unlocked' and brightness==5:
-			sendBrightness(255)
-		sendClock()
-
-
-	# sleeeeeep
-	sleep(sleepDelay)
+	CLOCK.read(ser.read(9999))
+	CLOCK.tick()
+	time.sleep(0.1)

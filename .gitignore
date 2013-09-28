@@ -3,5 +3,4 @@ build-*
 .lib
 *.o
 *.hex
-playback/screens.sh
-playback/screen-status.sh
+*.pyc

@@ -70,12 +70,16 @@ class Clock:
 
 		print line
 		# volume down
-		if line=='8':
+		if line == '8':
 			os.system(env + ' amixer -q sset Master 4%- unmute')
 
 		# volume up
-		elif line=='4':
+		elif line == '4':
 			os.system(env + ' amixer -q sset Master 4%+ unmute')
+
+		# toggle screens
+		elif line == '1':
+			os.system('screens.sh')
 
 class Line:
 	def __init__(self, source):
